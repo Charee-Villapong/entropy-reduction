@@ -27,4 +27,4 @@ AI組織 Issue #19 の開発物。
 
 ## 状態
 
-P0（完了の定義の固定＋テスト先行）、P1（計測まわり：config／contracts／linecount／measure）、P2（候補抽出 detect／証拠つき判定 judge）、P3（仕分け提示 present／ガードつき実行 execute）まで完了。埋め込みモデルは cl-nagoya/ruri-v3-310m を採用した（V-EMB の実測比較で本人が確定）。残りのユニット（preservation／remeasure）はスタブで、後続フェーズで順次実装する。
+P0（完了の定義の固定＋テスト先行）、P1（計測まわり：config／contracts／linecount／measure）、P2（候補抽出 detect／証拠つき判定 judge）、P3（仕分け提示 present／ガードつき実行 execute）、preservation（保存率テスト）／remeasure（再計測と Before/After 報告）まで実装完了し、全ユニット実装済み。埋め込みモデルは cl-nagoya/ruri-v3-310m を採用した（V-EMB の実測比較で本人が確定）。残りは P4 定期タスク化と P5 初回一巡。

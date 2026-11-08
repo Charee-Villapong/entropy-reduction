@@ -129,3 +129,13 @@ P3（present／execute の実装）で適用した前提をここに記録する
 - **execute の入力とガード（D2 の具体化）**：入力は ledger_rows 形式で、各行は7要素に加えて `candidate_id`／`target`／`action`／`user_decision` を持つ（台帳からの読み戻し時に付く）。ガードは fail-closed とする：行が0件、candidate_id の重複、`user_decision` の欠落・空白・値域外（delete／merge／codify／keep 以外）、`action` の欠落や `user_decision` との不一致、のいずれかがあれば、1件も実行せず全体を ValueError で拒否する。対象パスの解決先が `execute_root` 自体に一致する場合も「配下」ではないため全体を拒否する（P3 の QA 必須対応で具体化）。present が出した直後の行（user_decision を持たない）はそのままでは実行できない。
 - **execute の実行実体**：削減操作は executor（行を受け取り結果文字列を返す呼び出し可能オブジェクト）へ委譲し、`process(payload, config, executor=None)` で差し替え可能とする。executor が無い場合は、設定に `execute_root`（操作対象の基点ディレクトリ）があればファイル実体に対する executor を、無ければ記録のみの executor（実データに触らず `done` を返す）を使う。ファイル実体の executor の意味論：delete＝対象を削除、merge＝対象の内容を `migration_target` の末尾へ寄せてから対象を削除、codify＝移行（符号化）は組織側の開発で済んでいる前提で対象を削除。対象パスは `execute_root` 配下に解決し、配下から外れるパス（絶対パス・`..` による脱出）は実行前に全体を拒否する。個別の操作失敗（対象不在など）はその行の `result` を `failed` として記録し、他行の実行は続ける。
 - **execution_record の counts**：`total` は入力行数、`executed` は result が `done` の件数。verdict が `keep` の行は操作を行わず `result` を `kept` とし、`executed` には数えない。
+
+## 付記：入力前提と設計判断（preservation／remeasure で確定）
+
+preservation／remeasure の実装で適用した前提をここに記録する。本文（§1〜§6）は変更していない。
+
+- **preservation の入力**：preservation_input（`questions`／`answers`／`item_locations`）。`questions` は各要素が `id`／`category`／`item_id` を持ち、`answers` は各要素が `question_id`／`correct` を持つ。`item_locations` は項目 ID → 所在リスト（`md`／`code`）の dict。payload が dict でない、`questions` が無い・空・リストでない、問題セットに `category` が `accident` または `exception` の問題が1件も無い（D7）、`item_locations` が無い・空・dict でない、`answers` が無い・空・リストでない、のいずれかは ValueError とする。
+- **preservation の計算**：保存率は正答の answers 数 ÷ answers 総数。到達可能性の母集団は `questions` の `item_id` の和集合と `item_locations` のキーの和集合とし、所在リストが空でないリストの項目を到達可能とする（空リスト・欠落は到達不可。`code` のみでも到達可能＝符号化を数える）。`pass` は保存率が合格ライン以上、かつ到達可能性が 1.0 のときだけ true とする（境界は「以上」）。出力は preservation_result 形式ちょうどとし、返す前に contracts で検証する。
+- **合格ラインの暫定ステータス（D6）**：合格ラインは設定 `preservation_pass_line` からのみ読み、欠落・数値でない・0〜1 の範囲外は ValueError とする（コードへの直書きフォールバックは持たない）。このラインは暫定値であり、最終確定は P5 初回一巡後に本人が行う。
+- **問題セット初版はフィクスチャであること**：確認問題セットの初版は `tests/fixtures/preservation_questions_v1.json` の架空データとし、`accident`／`exception` カテゴリの問題を必ず含める。記録には識別子・カテゴリ・正答可否のみを持ち、問題文・回答文などの本文実値は入れない（D4）。実データの投入は P5 で行う。
+- **remeasure の入力と再利用**：remeasure_input（`before`／`after`／`preservation_result`）。いずれか欠ければ ValueError。`before`／`after` は contracts の snapshot 検証、`preservation_result` は contracts の preservation_result 検証を通し、違反はそのまま ValueError とする。削減量は数え直さず、検証済み snapshot の totals をそのまま使って before − after で算出する（P1 の measure と同じ物差しの再利用）。`totals_trend` には before／after の totals 全体のコピーを載せ、出力は remeasure_report 形式として返す前に contracts で検証する。

@@ -2,7 +2,8 @@
 
 対象は ``entropy_reduction.embeddings`` の純粋関数群。
 合成ベクトルで検証し、numpy は不要とする（pca_reduce のみ
-``pytest.importorskip("numpy")`` で形・決定性・符号の安定を見る）。
+``pytest.importorskip("numpy")`` で形・決定性・符号の安定と
+コサイン類似度の順序保存を見る）。
 """
 
 import math
@@ -176,3 +177,25 @@ def test_pca_reduce_is_deterministic_with_stable_sign():
     # 第1成分は x 軸方向で、符号固定により (2, 0) の射影は正になる。
     assert first[0][0] > 0
     assert first[2][0] < 0
+
+
+def test_pca_reduce_preserves_cosine_similarity_order():
+    pytest.importorskip("numpy")
+    # 中心化すると原点が移動してコサイン類似度の順序が崩れることへの
+    # 回帰防止。射影前は sim(1,2) > sim(0,2) > sim(0,1)。
+    vectors = [
+        [0.0, 0.0, 0.5],
+        [0.0, 0.5, 0.5],
+        [0.0, 0.5, 1.0],
+    ]
+    pairs = [(0, 1), (0, 2), (1, 2)]
+    before = embeddings.cosine_matrix(vectors)
+    reduced = embeddings.pca_reduce(vectors, 2)
+    assert all(len(row) == 2 for row in reduced)
+    after = embeddings.cosine_matrix(reduced)
+    order_before = sorted(pairs, key=lambda pair: (-before[pair[0]][pair[1]], pair))
+    order_after = sorted(pairs, key=lambda pair: (-after[pair[0]][pair[1]], pair))
+    assert order_before == [(1, 2), (0, 2), (0, 1)]
+    assert order_after == order_before
+    for i, j in pairs:
+        assert after[i][j] == pytest.approx(before[i][j])

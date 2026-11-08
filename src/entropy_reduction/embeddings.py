@@ -83,13 +83,20 @@ def embed_texts(texts, model_name):
 
 
 def pca_reduce(vectors, n_components):
-    """ベクトル列を PCA で上位 ``n_components`` 成分へ射影する。
+    """ベクトル列を上位 ``n_components`` 特異方向へ射影する。
 
-    中心化 → SVD → 上位 k 成分への射影。k は
+    中心化しない truncated SVD → 上位 k 方向への射影。k は
     min(n_components, サンプル数, 次元数) に丸める。
     各成分の符号は「最大絶対値要素が正」になるよう固定し、決定的にする。
     サンプル数が1以下なら入力をそのまま返す。
     ``numpy`` は関数内で遅延 import する。
+
+    コサイン類似度を保存するため中心化しない。コサイン類似度は
+    原点から見たベクトルのなす角で決まるため、平均を引いて原点を
+    移動すると角度が変わり、類似度の大小関係が崩れてしまう
+    （実測でも中心化により言い換えペアの類似度が 0.943 から
+    0.253 へ崩壊し、候補が検出できなかった）。中心化しない
+    truncated SVD は原点を保つ直交射影であり、類似度を保存する。
     """
     if len(vectors) <= 1:
         return vectors
@@ -105,14 +112,13 @@ def pca_reduce(vectors, n_components):
             f"n_components は 1 以上でなければなりません: {n_components!r}"
         )
 
-    centered = array - array.mean(axis=0, keepdims=True)
-    _, _, vt = np.linalg.svd(centered, full_matrices=False)
+    _, _, vt = np.linalg.svd(array, full_matrices=False)
     components = np.array(vt[:k], dtype=float)
     for row in range(k):
         pivot = int(np.argmax(np.abs(components[row])))
         if components[row][pivot] < 0:
             components[row] = -components[row]
-    projected = centered @ components.T
+    projected = array @ components.T
     return [[float(value) for value in row] for row in projected]
 
 

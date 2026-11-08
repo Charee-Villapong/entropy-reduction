@@ -27,4 +27,4 @@ AI組織 Issue #19 の開発物。
 
 ## 状態
 
-P0（完了の定義の固定＋テスト先行）まで完了。P1 以降は順次実施する。
+P0（完了の定義の固定＋テスト先行）と P1（計測まわり：config／contracts／linecount／measure）まで完了。残りのユニット（detect／judge／present／execute／preservation／remeasure）はスタブで、P2 以降に順次実装する。

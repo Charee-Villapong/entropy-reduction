@@ -9,6 +9,8 @@
 import json
 from pathlib import Path
 
+from . import contracts
+
 REQUIRED_KEYS = (
     "bloat_md_lines",
     "unused_days",
@@ -99,5 +101,22 @@ def load_config(path):
             raise ValueError(f"{key} は数値でなければなりません: {value!r}")
         if not 0 <= value <= 1:
             raise ValueError(f"{key} は 0〜1 の範囲でなければなりません: {value!r}")
+
+    if "decision_markers" in data:
+        markers = data["decision_markers"]
+        if not isinstance(markers, dict) or not markers:
+            raise ValueError(
+                f"decision_markers は空でない dict でなければなりません: {markers!r}"
+            )
+        for marker, decision in markers.items():
+            if not isinstance(marker, str) or marker == "":
+                raise ValueError(
+                    "decision_markers のキーは空でない文字列でなければなりません: "
+                    f"{marker!r}"
+                )
+            if decision not in contracts.JUDGED_VERDICTS:
+                raise ValueError(
+                    f"decision_markers の値が不正です: {marker!r} -> {decision!r}"
+                )
 
     return data

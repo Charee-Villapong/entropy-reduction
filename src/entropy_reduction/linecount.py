@@ -8,6 +8,8 @@ CRLF に左右されない）。種別は target（または path）の拡張子
 
 from pathlib import Path
 
+from .cli import run_cli
+
 # 拡張子と種別の対応表（ケース依存の定義値はここに一箇所だけ集約する）。
 MD_EXTENSIONS = frozenset({".md", ".markdown", ".mdx"})
 CODE_EXTENSIONS = frozenset(
@@ -87,3 +89,8 @@ def process(payload, config):
         return {"lines": count_lines(text), "category": categorize(path)}
 
     raise ValueError("入力に text も path もありません")
+
+
+if __name__ == "__main__":
+    # linecount は設定が無ければ空設定で続行する。
+    raise SystemExit(run_cli(process, allow_missing_config=True))

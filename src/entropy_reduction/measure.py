@@ -17,6 +17,8 @@ D5: 同じ対象名は重ねて数えない。同名 target は最初の出現�
 import json
 from pathlib import Path
 
+from .cli import run_cli
+
 COUNT_KEYS = (
     "crons",
     "hooks",
@@ -149,3 +151,7 @@ def process(payload, config):
         "totals": totals,
         "sources": _harness_sources(config),
     }
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_cli(process))

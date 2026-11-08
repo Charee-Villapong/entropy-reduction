@@ -6,8 +6,8 @@
 
 D2 の実行ガードは fail-closed：``user_decision``（delete／merge／
 codify／keep）が記録されていない行が1件でも混ざれば、全体を拒否して
-何も実行しない。行0件・candidate_id の重複・``action`` と
-``user_decision`` の不一致も全体を拒否する。present が出した直後の
+何も実行しない。行0件・candidate_id の重複・``action`` の欠落や
+``user_decision`` との不一致も全体を拒否する。present が出した直後の
 行（user_decision を持たない）はそのままでは実行できない。
 
 削減操作の実体は executor へ委譲する（``process(payload, config,
@@ -68,7 +68,9 @@ def _validate_rows(payload):
                 f"{decision!r}"
             )
         action = row.get("action")
-        if action is not None and action != decision:
+        if action is None:
+            raise ValueError(f"{context}（{candidate_id}）に action がありません（D2）")
+        if action != decision:
             raise ValueError(
                 f"{context}（{candidate_id}）の action と user_decision が"
                 f"一致しません: {action!r} != {decision!r}"
@@ -87,7 +89,7 @@ def _resolve_under_root(root, target, context):
         raise ValueError(f"{context} に対象パスがありません")
     base = Path(root).expanduser().resolve()
     resolved = (base / target).resolve()
-    if resolved != base and base not in resolved.parents:
+    if base not in resolved.parents:
         raise ValueError(
             f"{context} が execute_root の配下から外れています: {target!r}"
         )

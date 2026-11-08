@@ -252,3 +252,29 @@ def test_present_output_rows_cannot_be_executed_directly(
     rows = present.process(copy.deepcopy(judged_payload), load_config())
     with pytest.raises(ValueError):
         execute.process(rows, load_config())
+
+
+def test_execute_filesystem_root_itself_is_rejected(unit, load_config, tmp_path):
+    """QA finding: the root itself is not "under" the root -- a target
+    resolving to execute_root ("." / "docs/..") must be refused before
+    anything runs, so the whole tree can never be deleted."""
+    execute = unit("execute")
+    root = tmp_path / "root"
+    (root / "docs").mkdir(parents=True)
+    inside = root / "docs" / "keep.md"
+    inside.write_text("keep\n", encoding="utf-8")
+    config = load_config(overrides={"execute_root": str(root)})
+    for bad_target in (".", "docs/.."):
+        payload = _exec_payload(_exec_row("cand-1", "delete", target=bad_target))
+        with pytest.raises(ValueError):
+            execute.process(payload, config)
+        assert root.exists()
+        assert inside.exists()
+
+
+def test_execute_row_without_action_rejected(unit, load_config):
+    execute = unit("execute")
+    row = _exec_row("cand-1", "delete")
+    del row["action"]
+    with pytest.raises(ValueError):
+        execute.process(_exec_payload(row), load_config())

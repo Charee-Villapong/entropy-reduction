@@ -1,0 +1,29 @@
+{
+ "pairs_version": 1,
+ "note": "V-EMB 追加実測（Issue #19）。run_bench.py と同一条件。Qwen3-Embedding は指示文なし（他6モデルと同じ素の条件）で測定。",
+ "results": [
+  {
+   "model": "Qwen/Qwen3-Embedding-0.6B",
+   "dim": 1024,
+   "size_mb": 1207.5,
+   "load_s": 3.84,
+   "encode_60_median_s": 7.101,
+   "sentences_per_s": 8.4,
+   "paraphrase_mean": 0.7677,
+   "paraphrase_std": 0.0714,
+   "negation_mean": 0.8998,
+   "negation_std": 0.0493,
+   "unrelated_mean": 0.3352,
+   "margin": -0.1321,
+   "rank_accuracy": 0.0486,
+   "worst_negation": {
+    "pair": [
+     "その情報は社外に公開できる",
+     "その情報は社外に公開できない"
+    ],
+    "sim": 0.9729
+   },
+   "paraphrase_min": 0.6236
+  }
+ ]
+}

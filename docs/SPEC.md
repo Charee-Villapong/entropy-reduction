@@ -12,6 +12,7 @@ AI組織 Issue #19「エントロピー削減の仕組み」の正本仕様。P0
 - 月次棚卸し＝検出と深い点検、本仕組み＝実行の一本窓口。棚卸しの検出結果は候補入力として受け取る。候補の提示先はタスク台帳に一本化する。
 - 疎結合：下記ユニットはそれぞれ独立した tool とし、単体でテスト・差し替え・再実行できる形にする。受け渡しは JSON ファイル（本書の交換形式）で行い、境界は contracts の検証で検査できる形にする。
 - 費用は0円。処理はすべてローカルで完結し、外部送信はしない（台帳への書き込みは sheet-writer 経由のみ）。
+- 埋め込みモデルは **cl-nagoya/ruri-v3-310m** を採用する（2026-11-08 本人確定。V-EMB の固定ペアセット実測で言い換え平均類似度 0.955・言い換えと否定の分離度 0.972 と最良だったもの）。モデル名は設定 `embedding_model` で持ち、差し替え可能とする。実測では類似度の絶対値が全体に高く（無関係ペアでも高い）、固定しきい値では候補を選べないことが判明しているため、detect の埋め込み経路は順位・相対評価を軸に候補を選ぶ（しきい値類はすべて設定値とする）。
 
 ## 2. ユニット構成と契約
 
@@ -73,6 +74,7 @@ AI組織 Issue #19「エントロピー削減の仕組み」の正本仕様。P0
 設定はコードに直書きせず、設定ファイル（`config.local.json`、git 管理外）から読む。雛形は `config.example.json`。
 必須キー：`bloat_md_lines`（肥大とみなす md 行数の入口の目安）/ `unused_days`（死蔵とみなす未使用日数の入口の目安）/ `preservation_pass_line`（保存率テストの合格ライン）/ `harness_state_dir`（棚卸しランの状態ファイルの置き場所）/ `ledger_target`（台帳の対象名）。
 しきい値は「候補として拾う入口の目安」であり、それだけで何も消えない（判定と仕分けを通る）。
+任意キー（埋め込み経路。雛形 `config.example.json` に既定値を置く）：`embedding_model`（採用モデル名。既定は cl-nagoya/ruri-v3-310m）/ `embedding_pca_components`（PCA で圧縮する次元数）/ `embedding_top_k`（順位ベース選択で見る近傍の順位幅）/ `embedding_relative_margin`（各チャンクの平均類似度からどれだけ際立っていれば候補にするかの相対マージン）/ `embedding_min_similarity`（絶対値の足切り。これ単独で候補を決めない）/ `embedding_chunk_chars`（チャンク化の最大文字数）。
 
 ## 5. 完了の定義（受け入れ条件）
 
@@ -105,3 +107,11 @@ P1（config／contracts／linecount／measure の実装）で確定した、本�
 - **measure**：入力は measure_input（`taken_at`／`targets`／`counts`）。targets は必須で、各要素は name 必須、code_lines／md_lines は int（bool 不可）・0以上。同名 target は最初の出現だけを数える（D5）。counts の5キーは欠けたら 0 とする。sources は設定 `harness_state_dir`（`~` 展開）内の `*.json` をファイル名順に読み、`{"type": "harness_run", "run_id": ..., "candidates_by_state": {...}}` を作る。状態ファイルに candidates_by_state が無く candidates（state 付きリスト）がある場合は state 別に数える。ディレクトリが無ければ sources は空、壊れた JSON の状態ファイルは ValueError。config は dict でもオブジェクト（属性）でも読める。
 - **CLI**：設定の探し方は「環境変数 `ENTROPY_REDUCTION_CONFIG` → `./config.local.json`」。終了コードは 0=正常／1=交換形式の違反／2=設定の誤り。linecount は設定ファイルが無ければ空設定で続行する。
 - **残ユニット**：detect／judge／present／execute／preservation／remeasure は本フェーズではスタブとし、`process` はフェーズ未実装の NotImplementedError を送出する。
+
+## 付記：入力前提と設計判断（P2 で確定）
+
+P2（detect／judge の実装）で適用した前提をここに記録する。本文（§1〜§6）は変更していない。
+
+- **detect**：入力は detect_input（`snapshot`／`inventory_candidates`／`items`）。しきい値の境界は Q8 の設計判断どおり「以上（>=）」で適用する（肥大＝ md の `md_lines` が `bloat_md_lines` 以上、死蔵＝ `last_used_days_ago` が `unused_days` 以上）。`items` の同一 `signature` は重複候補を1件だけ出す。`inventory_candidates` は `source: inventory` でそのまま候補に載せ、category の不正は ValueError とする。候補 ID は入力順に決定的に振る（D10）。
+- **detect の埋め込み経路**：入力に `documents`（`target`／`text` の列）があれば、チャンク化 → 採用モデルでベクトル化 → PCA 圧縮 → 類似ペア検出を行い、`source: embedding` の重複候補を出す。候補の選択は順位・相対評価を軸とする：ペアが互いの近傍順位（設定 `embedding_top_k`）に入り、かつ類似度が双方の平均類似度＋相対マージン（設定 `embedding_relative_margin`）を超え、かつ絶対値の足切り（設定 `embedding_min_similarity`）以上であること。出力には本文の実値を含めず、類似度・順位などのメタ情報だけを載せる（D4）。`documents` が無い入力では埋め込み経路は動かない。
+- **judge**：入力は judge_input（`candidates`／`evidence`）。証拠エントリは証拠3点に加えて判定案（`proposed_verdict`／`migration_target`／`reason`）を含む（Q9）。証拠3点が1つでも欠ける、または判定案が欠ける候補は `needs_check` に分離する（verdict は null、不足点は reason に明記）。`proposed_verdict` が値域外なら ValueError。統合・符号化（merge／codify）で移行先が無い場合も ValueError。候補に無い ID への証拠は ValueError。入力の candidates が判定欄（verdict）を持てば contracts が ValueError とする（層の分離）。

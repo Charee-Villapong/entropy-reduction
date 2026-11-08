@@ -156,3 +156,17 @@ P4（定期タスク化）で適用した前提をここに記録する。本文
 - **運用状態の置き場所**：`cycle_state_dir` 配下に presented.json（提示済み）／snapshots（回ごとの snapshot）／history.jsonl（回の履歴）／runs/<日付>（回ごとの作業ファイル）を置く。detect_input は文書本文（実値）を含むため保存しない（D4）。
 - **実行段の接続**：execute は一巡の後の段として定期タスクの手順に接続するが、台帳での本人の仕分けの記録形式が未確定のため、当面は仕分け済み行なしとして扱い、実データへの削減実行は行わない。設定にも execute_root を入れないため、万一実行段が動いても記録のみになる。仕分けの記録形式は P5 初回一巡の前に本人の確認を取る。
 - **定期タスク**：cron `entropy-reduction-weekly`（金曜 10:08、owner は goal:ai-organization、配信先はAI組織チャット）。企画会議（金曜 08:08）と Threads 技術情報収集（金曜 09:08）の後に置き、組織系ジョブの競合を避けるためこの時刻とした。大作業直後の臨時実行は同ジョブの手動実行で行い、自動検知はしない。
+
+## 付記：入力前提と設計判断（仕分け記録形式で確定）
+
+台帳での本人の仕分けの記録形式（2026-11-08 本人決定、Issue #19 記録済み）と、その読み取りユニット `decisions` で適用した前提をここに記録する。本文（§1〜§6）の変更はない。本形式は本人の留保（「使いにくければあとでまた変えよ」）つきで確定したものであり、形式変更時は後記の差し替え方法で対応する。
+
+- **形式定義**：本人の仕分けは、台帳の候補行の「止まってる理由・前提条件」列（ledger_rows 形式では `reason` キー）の**先頭**にマーカーを記入する形とする。マーカー集合と decision への対応の既定値は、`[削除]` → `delete`／`[統合]` → `merge`／`[符号化]` → `codify`／`[保持]` → `keep` とする。マーカーの後に仕分けのメモなどを続けて書いてもよい（解析は先頭のマーカーだけを見る）。
+- **decisions の入力**：payload は `rows`（台帳から読み戻した行の列。各行は台帳の7要素を持つ。ledger_rows 形式の dict そのものでもよい）／`candidates`（candidates 形式。`target` の解決用）／`judged`（judged 形式。`migration_target` の解決用）を持つ。各要素は contracts の検証（`validate_ledger_rows`／`validate_candidates`／`validate_judged`）を通す。対象行は `link` が candidates の `id` と一致する行だけとし、候補と無関係な一般行は無視する（出力にもスキップの件数にも入れない）。
+- **解析規則**：`reason` の前置空白は許容する（Python の `lstrip` が落とす Unicode 空白。半角空白のほか全角空白も落ちることを実装で確認済み）。先頭に既知マーカーがある場合だけ仕分けとして扱い、中ほどにあるマーカーは無効とする。仕分けが取れた行は、読み戻し行の7要素＋`candidate_id`（= `link`）＋`target`（candidate の target）＋`action`（= decision）＋`user_decision`（= decision）を出力行とし、decision が merge／codify の場合は judged 項目の `migration_target` を付ける。
+- **スキップの記録**：候補行のうち出力に入らなかったものは、理由コードつきで出力の `skipped`（各要素は `candidate_id` と `reason_code` のみ。`reason` の本文など実値は入れない＝D4。D4 の禁止フィールド名も使わない）と `skipped_count` に記録する。理由コードは `no_marker`（マーカーなし。中ほどのマーカーも含む）／`unknown_marker`（先頭が `[` で始まるが既知マーカーに一致しない）／`missing_migration_target`（merge／codify で移行先が取得できない）を区別する。
+- **移行先欠落の扱い**：decision が merge／codify で移行先が取得できない場合（候補が `needs_check`、判定が delete／keep で移行先が無い、対応する judged 項目が無い等）は、その行を出力に入れず `missing_migration_target` でスキップとして記録する。移行先を捏造しない。
+- **重複の扱い**：同一候補にマーカーつき行が複数ある場合は黙って間引かず両方を通す。重複を全体拒否するのは execute の D2 ガードの役割とする。
+- **0件の扱い**：仕分け済み0件でも正常出力（ledger_rows 形式で `rows` は空）とする。実行段が空で拒否するのが fail-closed として正しい。
+- **対応表の設定化と既定値（D6 との関係）**：対応表は設定キー `decision_markers` で丸ごと差し替え可能とする（存在する場合は空でない dict、キーは空でない文字列、値は `contracts.JUDGED_VERDICTS` のいずれか。不正は ValueError とし、`config` の読み込み時と `decisions` の実行時の両方で検証する）。設定に無い場合は `decisions` モジュール内の既定値を使う。この既定値は合格ラインのような判定値ではなく形式定義（マーカー文字列と decision の対応）であるため、D6 の「しきい値・合格ラインは設定から読み、コードへの直書きフォールバックを持たない」には当たらない。形式定義をコード側に一箇所だけ持つのは linecount の種別対応表と同じ扱いとする。
+- **形式変更時の差し替え方法**：マーカーの文言や対応だけが変わる場合は、設定 `decision_markers` を差し替えるだけで済む。記入する列や位置（先頭以外）など形式そのものが変わる場合は、読み取りユニット `decisions` を差し替える（入力の `rows`／`candidates`／`judged` と出力の ledger_rows 形式は変えないため、execute 以降は無変更で接続できる）。

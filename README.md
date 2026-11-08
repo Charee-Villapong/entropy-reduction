@@ -27,4 +27,4 @@ AI組織 Issue #19 の開発物。
 
 ## 状態
 
-P0（完了の定義の固定＋テスト先行）、P1（計測まわり：config／contracts／linecount／measure）、P2（候補抽出 detect／証拠つき判定 judge）、P3（仕分け提示 present／ガードつき実行 execute）、preservation（保存率テスト）／remeasure（再計測と Before/After 報告）まで実装完了し、全ユニット実装済み。埋め込みモデルは cl-nagoya/ruri-v3-310m を採用した（V-EMB の実測比較で本人が確定）。P4（定期タスク化：配線層 `cycle` と週次 cron `entropy-reduction-weekly`〈金曜 10:08〉）まで完了。残りは P5 初回一巡と QA。
+P0（完了の定義の固定＋テスト先行）、P1（計測まわり：config／contracts／linecount／measure）、P2（候補抽出 detect／証拠つき判定 judge）、P3（仕分け提示 present／ガードつき実行 execute）、preservation（保存率テスト）／remeasure（再計測と Before/After 報告）まで実装完了し、全ユニット実装済み。埋め込みモデルは cl-nagoya/ruri-v3-310m を採用した（V-EMB の実測比較で本人が確定）。P4（定期タスク化：配線層 `cycle` と週次 cron `entropy-reduction-weekly`〈金曜 10:08〉）まで完了。台帳での仕分け記録形式（候補行の「止まってる理由・前提条件」列の先頭に `[削除]`／`[統合]`／`[符号化]`／`[保持]` を記入）が本人の決定で確定し、その読み取りユニット `decisions`（台帳行 → execute の入力への変換。対応表は設定 `decision_markers` で差し替え可能）を実装した。残りは P5 初回一巡と QA。

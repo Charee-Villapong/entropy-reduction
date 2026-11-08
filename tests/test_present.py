@@ -7,6 +7,14 @@ ledger elements named in SPEC section 3 (タスク／状態／止まってる理
 前提条件／前提の確認方法／期日・次回確認日／関連リンク／最終更新).
 Tests that check the needs_check marker search all row values, so they
 do not depend on which element carries the marker.
+
+Spec change (2026-11-08, the user's decision): a candidate judged as
+verdict=keep is out of scope (対象外) -- it does NOT become a ledger
+row; only its count is reported.  This supersedes the original P0
+premise "every candidate becomes a row" for keep candidates.  The
+fixture below contains no keep candidate, so the row-count test keeps
+its original form; the new premise is pinned by
+test_keep_verdict_candidate_is_counted_not_rowed.
 """
 
 import copy
@@ -21,7 +29,11 @@ def _row_text(row):
 
 
 def test_all_candidates_become_rows(unit, load_config, judged_payload):
-    """D9: judged and needs_check candidates alike become ledger rows."""
+    """D9: judged and needs_check candidates alike become ledger rows.
+
+    (The fixture holds no verdict=keep candidate; keep candidates are
+    excluded from rows per the 2026-11-08 spec change.)
+    """
     present = unit("present")
     result = present.process(judged_payload, load_config())
     assert result["kind"] == "ledger_rows"
@@ -113,3 +125,31 @@ def test_missing_items_raises(unit, load_config):
     present = unit("present")
     with pytest.raises(ValueError):
         present.process({"kind": "judged", "version": 1}, load_config())
+
+
+def test_keep_verdict_candidate_is_counted_not_rowed(
+    unit, load_config, judged_payload
+):
+    """Spec change (2026-11-08, user's decision): verdict=keep is
+    対象外 -- no ledger row, only the count is reported."""
+    present = unit("present")
+    payload = copy.deepcopy(judged_payload)
+    payload["items"].append(
+        {
+            "candidate_id": "cand-3",
+            "status": "judged",
+            "evidence": {
+                "last_used": "2026-11-01",
+                "references": ["docs/index.md"],
+                "impact": "現役で参照も多い",
+            },
+            "verdict": "keep",
+            "migration_target": None,
+            "reason": "現役のため保持",
+        }
+    )
+    result = present.process(payload, load_config())
+    texts = [_row_text(row) for row in result["rows"]]
+    assert len(result["rows"]) == 2
+    assert not any("cand-3" in t for t in texts)
+    assert result["excluded_count"] == 1

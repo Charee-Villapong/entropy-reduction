@@ -1,0 +1,143 @@
+{
+ "pairs_version": 1,
+ "results": [
+  {
+   "model": "intfloat/multilingual-e5-small",
+   "dim": 384,
+   "size_mb": 492.8,
+   "load_s": 3.7,
+   "encode_60_median_s": 1.478,
+   "sentences_per_s": 40.6,
+   "paraphrase_mean": 0.9242,
+   "paraphrase_std": 0.0183,
+   "negation_mean": 0.9739,
+   "negation_std": 0.0122,
+   "unrelated_mean": 0.8089,
+   "margin": -0.0497,
+   "rank_accuracy": 0.0069,
+   "worst_negation": {
+    "pair": [
+     "USBメモリの使用は許可されている",
+     "USBメモリの使用は許可されていない"
+    ],
+    "sim": 0.9892
+   },
+   "paraphrase_min": 0.884
+  },
+  {
+   "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+   "dim": 384,
+   "size_mb": 499.6,
+   "load_s": 1.5,
+   "encode_60_median_s": 1.288,
+   "sentences_per_s": 46.6,
+   "paraphrase_mean": 0.8188,
+   "paraphrase_std": 0.1049,
+   "negation_mean": 0.7593,
+   "negation_std": 0.1414,
+   "unrelated_mean": 0.046,
+   "margin": 0.0595,
+   "rank_accuracy": 0.625,
+   "worst_negation": {
+    "pair": [
+     "手続きは省略してもよい",
+     "手続きは省略してはいけない"
+    ],
+    "sim": 0.9434
+   },
+   "paraphrase_min": 0.5991
+  },
+  {
+   "model": "intfloat/multilingual-e5-base",
+   "dim": 768,
+   "size_mb": 1134.4,
+   "load_s": 4.22,
+   "encode_60_median_s": 5.095,
+   "sentences_per_s": 11.8,
+   "paraphrase_mean": 0.939,
+   "paraphrase_std": 0.0219,
+   "negation_mean": 0.9666,
+   "negation_std": 0.0096,
+   "unrelated_mean": 0.7977,
+   "margin": -0.0276,
+   "rank_accuracy": 0.125,
+   "worst_negation": {
+    "pair": [
+     "会議室は予約なしで使える",
+     "会議室は予約なしでは使えない"
+    ],
+    "sim": 0.9815
+   },
+   "paraphrase_min": 0.9044
+  },
+  {
+   "model": "cl-nagoya/ruri-v3-310m",
+   "dim": 768,
+   "size_mb": 1267.0,
+   "load_s": 1.79,
+   "encode_60_median_s": 8.174,
+   "sentences_per_s": 7.3,
+   "paraphrase_mean": 0.9548,
+   "paraphrase_std": 0.0112,
+   "negation_mean": 0.9214,
+   "negation_std": 0.0144,
+   "unrelated_mean": 0.7608,
+   "margin": 0.0334,
+   "rank_accuracy": 0.9722,
+   "worst_negation": {
+    "pair": [
+     "会議室は予約なしで使える",
+     "会議室は予約なしでは使えない"
+    ],
+    "sim": 0.9446
+   },
+   "paraphrase_min": 0.9362
+  },
+  {
+   "model": "intfloat/multilingual-e5-large",
+   "dim": 1024,
+   "size_mb": 2261.8,
+   "load_s": 5.13,
+   "encode_60_median_s": 16.302,
+   "sentences_per_s": 3.7,
+   "paraphrase_mean": 0.9493,
+   "paraphrase_std": 0.0168,
+   "negation_mean": 0.9588,
+   "negation_std": 0.0138,
+   "unrelated_mean": 0.7948,
+   "margin": -0.0095,
+   "rank_accuracy": 0.3542,
+   "worst_negation": {
+    "pair": [
+     "会議室は予約なしで使える",
+     "会議室は予約なしでは使えない"
+    ],
+    "sim": 0.9835
+   },
+   "paraphrase_min": 0.916
+  },
+  {
+   "model": "BAAI/bge-m3",
+   "dim": 1024,
+   "size_mb": 2293.3,
+   "load_s": 3.9,
+   "encode_60_median_s": 13.603,
+   "sentences_per_s": 4.4,
+   "paraphrase_mean": 0.8439,
+   "paraphrase_std": 0.05,
+   "negation_mean": 0.8289,
+   "negation_std": 0.0386,
+   "unrelated_mean": 0.434,
+   "margin": 0.015,
+   "rank_accuracy": 0.625,
+   "worst_negation": {
+    "pair": [
+     "ノートパソコンは自宅に持ち帰れる",
+     "ノートパソコンは自宅に持ち帰れない"
+    ],
+    "sim": 0.8955
+   },
+   "paraphrase_min": 0.7482
+  }
+ ]
+}

@@ -139,3 +139,20 @@ preservation／remeasure の実装で適用した前提をここに記録する�
 - **合格ラインの暫定ステータス（D6）**：合格ラインは設定 `preservation_pass_line` からのみ読み、欠落・数値でない・0〜1 の範囲外は ValueError とする（コードへの直書きフォールバックは持たない）。このラインは暫定値であり、最終確定は P5 初回一巡後に本人が行う。
 - **問題セット初版はフィクスチャであること**：確認問題セットの初版は `tests/fixtures/preservation_questions_v1.json` の架空データとし、`accident`／`exception` カテゴリの問題を必ず含める。記録には識別子・カテゴリ・正答可否のみを持ち、問題文・回答文などの本文実値は入れない（D4）。実データの投入は P5 で行う。
 - **remeasure の入力と再利用**：remeasure_input（`before`／`after`／`preservation_result`）。いずれか欠ければ ValueError。`before`／`after` は contracts の snapshot 検証、`preservation_result` は contracts の preservation_result 検証を通し、違反はそのまま ValueError とする。削減量は数え直さず、検証済み snapshot の totals をそのまま使って before − after で算出する（P1 の measure と同じ物差しの再利用）。`totals_trend` には before／after の totals 全体のコピーを載せ、出力は remeasure_report 形式として返す前に contracts で検証する。
+
+## 付記：入力前提と設計判断（P4 で確定）
+
+P4（定期タスク化）で適用した前提をここに記録する。本文（§1〜§6）の変更はない。なお重複率・死蔵率については、2026-11-08 の本人決定により §3 の remeasure_report（4点）は拡張せず、週次サイクルの報告に detect 側の数値として並べる形とした。
+
+- **配線層 cycle**：一巡（measure → detect → judge → present → 台帳への行追加 → complete）は配線層 `cycle` が担う。cycle は §2 のユニットではなく、交換形式経由で各ユニットを接続し、実環境からの入力収集と運用状態を担う接続層である。judge の証拠集め（第2層）は実行するエージェント（削減係）が担い、cycle は judge の前後（candidates の生成と、judged から提示への変換）を接続する。一巡の流れ自体は日付・実環境に依存するため決定的ではない（D10 は各ユニットに対する要求で、cycle はその対象外）。
+- **cycle の設定キー**：`harness_config_path`（棚卸しの設定ファイルへのパス）と `cycle_state_dir`（運用状態の置き場所）を追加で必須とし、欠落・不正は設定エラー（終了コード 2）とする。コード側のフォールバック既定値は持たない（D6 と同じ）。
+- **対象範囲**：対象の列挙は inventory-harness の設定（`harness_config_path` が指す config.json の `targets.mirrors_dir`／`extra_targets`／`exclude`）を正とし、二重定義しない。現行の列挙は github-mirrors 配下の git リポジトリ群＋custom-skills（deadline-ledger を除く）。走査では `.git`／`__pycache__`／`node_modules`／`.venv`／`.pytest_cache`／`.mypy_cache` を枝刈りする。項目（item）の最終利用日は、git リポジトリでは対象ファイルの最終コミット時刻、取得できない場合と git でない対象ではファイルの更新時刻（mtime）とする。
+- **counts の供給**：measure の counts（crons／hooks／custom_skills／ledger_open_rows／open_issues）は、実行するエージェントが環境（cron 一覧・hook 一覧・台帳・GitHub）から集め、5キーちょうどの JSON ファイルで prepare に渡す。欠落・余分・非整数・負数は ValueError とする。
+- **棚卸し候補の入力統合**：棚卸しランの候補のうち終端状態（reported／rejected_as_spec）でないものを detect の inventory_candidates として取り込む。分類の対応は viewpoint の skill-md-bloat → bloat、md-redundancy → duplicate、それ以外 → other とし、（target, title）の重複は最初の1件だけを残す。
+- **指標の定義（本人決定の具体化）**：週次サイクルの報告（cycle_report）に、到達可能性・重複率・死蔵率・総量の推移を並べる。死蔵率は「source が weekly で category が dead の候補数 ÷ 走査項目数（items の件数）」。重複率は「signature を2件以上で共有するグループに属する項目と、埋め込み経路の重複候補の target との和集合の件数 ÷ 走査項目数」。走査項目数が 0 のとき両率は null とする。率は小数第4位までに丸める。到達可能性は直近の保存率テスト結果（状態ファイル last_preservation）があればその reachability を載せ、無ければ null とし、報告では「未計測」と明記する。総量の推移は、前回の snapshot の totals を before、当回の totals を after とする（初回は before が null）。
+- **増分の安定キー**：候補 ID はランごとに変わるため、提示済みの管理は安定キー（source|target|category|title）で行い、assemble-present で当該ランの候補 ID に変換して present の `presented_candidate_ids` へ渡す。提示済みの記録には、行になった候補（needs_check の行を含む。verdict が keep の候補は行にならないため記録しない）を残す。既知の制約として、同じ target に対する複数の埋め込み重複候補（相手先が異なるペア）は同じ安定キーに集約されるため、後続の週で新しいペアが出ても提示済みとして抑制されうる。候補の交換形式には相手先を表す構造化フィールドが無いための制約で、抑制側に倒す判断とする（月次棚卸しの深い点検が受け皿になる）。
+- **台帳への提示順**：assemble-present が出す ledger_rows は、束ねグループ間の並びを候補（candidates）の初出順とし、グループ内の行順は present の並びのまま、「要確認」の行は末尾に置く。present の束ね（同種の行の隣接）は保たれる。この整えは cycle 側で行い、present 本体は変更しない。
+- **complete の前提**：台帳への行追加は呼び出し側（cron のエージェント）が sheet-writer 経由で行い、complete は workdir の append_result.json（追加した行数）が ledger_rows の行数と一致することを確認してから提示済み状態と履歴を更新する（一致しなければ ValueError とし、状態は更新しない）。complete の run_date と指標は prepare_summary.json から読む。
+- **運用状態の置き場所**：`cycle_state_dir` 配下に presented.json（提示済み）／snapshots（回ごとの snapshot）／history.jsonl（回の履歴）／runs/<日付>（回ごとの作業ファイル）を置く。detect_input は文書本文（実値）を含むため保存しない（D4）。
+- **実行段の接続**：execute は一巡の後の段として定期タスクの手順に接続するが、台帳での本人の仕分けの記録形式が未確定のため、当面は仕分け済み行なしとして扱い、実データへの削減実行は行わない。設定にも execute_root を入れないため、万一実行段が動いても記録のみになる。仕分けの記録形式は P5 初回一巡の前に本人の確認を取る。
+- **定期タスク**：cron `entropy-reduction-weekly`（金曜 10:08、owner は goal:ai-organization、配信先はAI組織チャット）。企画会議（金曜 08:08）と Threads 技術情報収集（金曜 09:08）の後に置き、組織系ジョブの競合を避けるためこの時刻とした。大作業直後の臨時実行は同ジョブの手動実行で行い、自動検知はしない。

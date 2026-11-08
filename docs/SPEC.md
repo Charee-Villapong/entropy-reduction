@@ -88,3 +88,14 @@ AI組織 Issue #19「エントロピー削減の仕組み」の正本仕様。P0
 
 - テスト係は本書のみから受け入れテストを先行作成する（実装は見ない）。正常系の要所と異常系の基本ケースを押さえる。
 - 実装係はテストを書き換えずに通す。実装中に必要になった回帰テストの追加はよいが、仕様由来か実装都合かは検閲で判定する。
+
+## 付記：入力前提（P1 で確定）
+
+P1（config／contracts／linecount／measure の実装）で確定した、本書 §1〜§6 とテストから読み取った入力前提をここに記録する。本文（§1〜§6）は変更していない。
+
+- **config**：`load_config(path)` は検証済みの dict を返す。必須キー欠落・型違い（bool は int／数値として扱わない）・範囲外は ValueError。壊れた JSON・非オブジェクト JSON も ValueError。ファイル不在は FileNotFoundError（OSError）のまま。余分なキーは許容する。
+- **contracts**：全形式共通で kind 一致と version==1（int、bool 不可）を必須とする。D4 の禁止フィールド（content／file_content／raw_text／body／password／token／api_key／secret／private_key／connection_string／connection_info／personal_info／credential／credentials）は、トップレベル・ネストを問わずどこに現れても ValueError。candidates の各要素に verdict キーが存在するだけで（null でも）ValueError。judged では status=judged のとき証拠3点がすべて非 null であること（references の空リストは証拠として有効）、status=needs_check のとき verdict は null 必須であることを検査する。
+- **linecount**：入力は `{"text": ..., "target": 名前}` または `{"path": パス}`、出力は `{"lines": int, "category": "md" | "code" | "other"}`。行数は論理行（Python の `splitlines` の意味論）。種別は拡張子で判定し、対応表は `linecount.py` の定数に一箇所だけ集約する。text も path も無ければ ValueError、存在しない path は FileNotFoundError（OSError）、読み込みは UTF-8。
+- **measure**：入力は measure_input（`taken_at`／`targets`／`counts`）。targets は必須で、各要素は name 必須、code_lines／md_lines は int（bool 不可）・0以上。同名 target は最初の出現だけを数える（D5）。counts の5キーは欠けたら 0 とする。sources は設定 `harness_state_dir`（`~` 展開）内の `*.json` をファイル名順に読み、`{"type": "harness_run", "run_id": ..., "candidates_by_state": {...}}` を作る。状態ファイルに candidates_by_state が無く candidates（state 付きリスト）がある場合は state 別に数える。ディレクトリが無ければ sources は空、壊れた JSON の状態ファイルは ValueError。config は dict でもオブジェクト（属性）でも読める。
+- **CLI**：設定の探し方は「環境変数 `ENTROPY_REDUCTION_CONFIG` → `./config.local.json`」。終了コードは 0=正常／1=交換形式の違反／2=設定の誤り。linecount は設定ファイルが無ければ空設定で続行する。
+- **残ユニット**：detect／judge／present／execute／preservation／remeasure は本フェーズではスタブとし、`process` はフェーズ未実装の NotImplementedError を送出する。

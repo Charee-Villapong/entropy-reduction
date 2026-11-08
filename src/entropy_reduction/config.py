@@ -20,6 +20,14 @@ REQUIRED_KEYS = (
 _NON_NEGATIVE_INT_KEYS = ("bloat_md_lines", "unused_days")
 _NON_EMPTY_STR_KEYS = ("harness_state_dir", "ledger_target")
 
+# 任意キー（埋め込み経路。存在する場合のみ検証し、欠けていてもよい）。
+_POSITIVE_INT_KEYS = (
+    "embedding_top_k",
+    "embedding_pca_components",
+    "embedding_chunk_chars",
+)
+_RATE_KEYS = ("embedding_relative_margin", "embedding_min_similarity")
+
 
 def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
@@ -66,5 +74,30 @@ def load_config(path):
         value = data[key]
         if not isinstance(value, str) or value == "":
             raise ValueError(f"{key} は空でない文字列でなければなりません: {value!r}")
+
+    if "embedding_model" in data:
+        value = data["embedding_model"]
+        if not isinstance(value, str) or value == "":
+            raise ValueError(
+                f"embedding_model は空でない文字列でなければなりません: {value!r}"
+            )
+
+    for key in _POSITIVE_INT_KEYS:
+        if key not in data:
+            continue
+        value = data[key]
+        if not _is_int(value):
+            raise ValueError(f"{key} は整数でなければなりません: {value!r}")
+        if value < 1:
+            raise ValueError(f"{key} は 1 以上でなければなりません: {value!r}")
+
+    for key in _RATE_KEYS:
+        if key not in data:
+            continue
+        value = data[key]
+        if not _is_number(value):
+            raise ValueError(f"{key} は数値でなければなりません: {value!r}")
+        if not 0 <= value <= 1:
+            raise ValueError(f"{key} は 0〜1 の範囲でなければなりません: {value!r}")
 
     return data

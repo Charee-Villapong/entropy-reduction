@@ -11,7 +11,14 @@
 つきで ``skipped`` に記録する。
 """
 
+import copy
+import json
+import os
+import subprocess
+import sys
+
 import pytest
+from conftest import REPO_ROOT, VALID_CONFIG
 
 
 def _candidates(*entries):
@@ -318,3 +325,99 @@ def test_output_passes_contracts_and_chains_to_execute(unit, load_config):
     assert items["cand-1"]["result"] == "done"
     assert items["cand-2"]["action"] == "keep"
     assert record["counts"]["total"] == 2
+
+
+# --- decision_markers の unhashable 値（QA 必須-1 回帰） ---------------------
+#
+# decision_markers の値が list／dict（unhashable）のとき、メンバーシップ
+# 判定（``decision in JUDGED_VERDICTS``）が TypeError を送出してはならず、
+# 既存の契約どおり ValueError にならなければならない。CLI では設定の
+# 誤りとして終了コード 2 で終わること。
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        ["delete"],
+        {"verdict": "delete"},
+    ],
+)
+def test_load_config_unhashable_decision_marker_value_raises_value_error(
+    load_config, bad_value
+):
+    with pytest.raises(ValueError):
+        load_config(overrides={"decision_markers": {"[削除]": bad_value}})
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        ["delete"],
+        {"verdict": "delete"},
+    ],
+)
+def test_process_unhashable_decision_marker_value_raises_value_error(
+    unit, load_config, bad_value
+):
+    decisions = unit("decisions")
+    config = dict(load_config())
+    config["decision_markers"] = {"[削除]": bad_value}
+    payload = _single_payload("[削除] 削除する")
+    with pytest.raises(ValueError):
+        decisions.process(payload, config)
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        ["delete"],
+        {"verdict": "delete"},
+    ],
+)
+def test_validate_decision_markers_unhashable_value_raises_value_error(unit, bad_value):
+    decisions = unit("decisions")
+    with pytest.raises(ValueError):
+        decisions.validate_decision_markers({"[削除]": bad_value})
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        ["delete"],
+        {"verdict": "delete"},
+    ],
+)
+def test_cli_unhashable_decision_marker_value_exits_with_code_2(tmp_path, bad_value):
+    config_data = copy.deepcopy(VALID_CONFIG)
+    config_data["decision_markers"] = {"[削除]": bad_value}
+    config_path = tmp_path / "config.local.json"
+    config_path.write_text(
+        json.dumps(config_data, ensure_ascii=False), encoding="utf-8"
+    )
+    input_path = tmp_path / "in.json"
+    input_path.write_text(
+        json.dumps(_single_payload("[削除] 削除する"), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "out.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([str(REPO_ROOT), str(REPO_ROOT / "src")])
+    env["ENTROPY_REDUCTION_CONFIG"] = str(config_path)
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "entropy_reduction.decisions",
+            str(input_path),
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(tmp_path),
+        timeout=60,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert "TypeError" not in proc.stderr
+    assert "unhashable type" not in proc.stderr
+    assert "Traceback" not in proc.stderr

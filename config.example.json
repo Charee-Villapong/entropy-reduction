@@ -1,0 +1,7 @@
+{
+  "bloat_md_lines": 300,
+  "unused_days": 90,
+  "preservation_pass_line": 1.0,
+  "harness_state_dir": "~/workspace/tools/inventory-harness/state/runs",
+  "ledger_target": "task-ledger"
+}

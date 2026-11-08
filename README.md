@@ -27,4 +27,4 @@ AI組織 Issue #19 の開発物。
 
 ## 状態
 
-P0（完了の定義の固定＋テスト先行）と P1（計測まわり：config／contracts／linecount／measure）まで完了。残りのユニット（detect／judge／present／execute／preservation／remeasure）はスタブで、P2 以降に順次実装する。
+P0（完了の定義の固定＋テスト先行）、P1（計測まわり：config／contracts／linecount／measure）、P2（候補抽出 detect／証拠つき判定 judge）まで完了。埋め込みモデルは cl-nagoya/ruri-v3-310m を採用した（V-EMB の実測比較で本人が確定）。残りのユニット（present／execute／preservation／remeasure）はスタブで、P3 以降に順次実装する。

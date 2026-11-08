@@ -74,7 +74,7 @@ AI組織 Issue #19「エントロピー削減の仕組み」の正本仕様。P0
 設定はコードに直書きせず、設定ファイル（`config.local.json`、git 管理外）から読む。雛形は `config.example.json`。
 必須キー：`bloat_md_lines`（肥大とみなす md 行数の入口の目安）/ `unused_days`（死蔵とみなす未使用日数の入口の目安）/ `preservation_pass_line`（保存率テストの合格ライン）/ `harness_state_dir`（棚卸しランの状態ファイルの置き場所）/ `ledger_target`（台帳の対象名）。
 しきい値は「候補として拾う入口の目安」であり、それだけで何も消えない（判定と仕分けを通る）。
-任意キー（埋め込み経路。雛形 `config.example.json` に既定値を置く）：`embedding_model`（採用モデル名。既定は cl-nagoya/ruri-v3-310m）/ `embedding_pca_components`（PCA で圧縮する次元数）/ `embedding_top_k`（順位ベース選択で見る近傍の順位幅）/ `embedding_relative_margin`（各チャンクの平均類似度からどれだけ際立っていれば候補にするかの相対マージン）/ `embedding_min_similarity`（絶対値の足切り。これ単独で候補を決めない）/ `embedding_chunk_chars`（チャンク化の最大文字数）。
+埋め込み経路のキー（雛形 `config.example.json` に既定値を置く。ファイルに無くても他のユニットは動くが、**埋め込み経路を実行するときは全キーが必須**で、欠ければ ValueError とする。コード側のフォールバック既定値は持たない＝D6）：`embedding_model`（採用モデル名。既定は cl-nagoya/ruri-v3-310m）/ `embedding_pca_components`（PCA で圧縮する次元数）/ `embedding_top_k`（順位ベース選択で見る近傍の順位幅）/ `embedding_relative_margin`（各チャンクの平均類似度からどれだけ際立っていれば候補にするかの相対マージン）/ `embedding_min_similarity`（絶対値の足切り。これ単独で候補を決めない）/ `embedding_chunk_chars`（チャンク化の最大文字数）。
 
 ## 5. 完了の定義（受け入れ条件）
 

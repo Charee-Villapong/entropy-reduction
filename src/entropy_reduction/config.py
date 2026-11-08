@@ -102,24 +102,24 @@ def load_config(path):
         if not 0 <= value <= 1:
             raise ValueError(f"{key} は 0〜1 の範囲でなければなりません: {value!r}")
 
-    if "decision_markers" in data:
-        markers = data["decision_markers"]
-        if not isinstance(markers, dict) or not markers:
+    if "decision_labels" in data:
+        labels = data["decision_labels"]
+        if not isinstance(labels, dict) or not labels:
             raise ValueError(
-                f"decision_markers は空でない dict でなければなりません: {markers!r}"
+                f"decision_labels は空でない dict でなければなりません: {labels!r}"
             )
-        for marker, decision in markers.items():
-            if not isinstance(marker, str) or marker == "":
+        for label, decision in labels.items():
+            if not isinstance(label, str) or label == "":
                 raise ValueError(
-                    "decision_markers のキーは空でない文字列でなければなりません: "
-                    f"{marker!r}"
+                    "decision_labels のキーは空でない文字列でなければなりません: "
+                    f"{label!r}"
                 )
             if (
                 not isinstance(decision, str)
                 or decision not in contracts.JUDGED_VERDICTS
             ):
                 raise ValueError(
-                    f"decision_markers の値が不正です: {marker!r} -> {decision!r}"
+                    f"decision_labels の値が不正です: {label!r} -> {decision!r}"
                 )
 
     return data

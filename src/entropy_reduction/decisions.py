@@ -1,51 +1,56 @@
-"""第3層：仕分けの読み取り（台帳のマーカー → execute の入力）.
+"""第3層：仕分けの読み取り（仕分け列 → execute の入力）.
 
-本人が台帳の候補行の「止まってる理由・前提条件」欄（ledger_rows
-形式では ``reason`` キー）の**先頭**に記入した仕分けマーカーを読み、
-execute が受け付ける形（7要素＋``candidate_id``／``target``／
-``action``／``user_decision``、統合・符号化では ``migration_target``）
-へ変換する読み取りユニット（2026-11-08 本人決定の記録形式）。
+本人が専用タブ「エントロピー候補」の「仕分け」列（プルダウン）で
+選んだ値を読み、execute が受け付ける形（7要素＋``candidate_id``／
+``target``／``action``／``user_decision``、統合・符号化では
+``migration_target``）へ変換する読み取りユニット。
 
 入力 payload は次の3要素を持つ：
 
-- ``rows``：台帳から読み戻した行の列（各行は台帳の7要素を持つ。
-  ledger_rows 形式の dict そのものでもよい。候補と無関係な一般行が
+- ``rows``：台帳から読み戻した行の列（各行は台帳の7要素に加え、
+  仕分け列の値 ``decision_label`` を持つ。候補と無関係な一般行が
   混ざっていてよい）
 - ``candidates``：candidates 形式（``target`` の解決用）
 - ``judged``：judged 形式（``migration_target`` の解決用）
 
 対象行は ``link`` が candidates の ``id`` と一致する行だけとし、
-無関係な行は無視する（件数にも入れない）。マーカー解析では
-``reason`` の前置空白（半角・全角を含む。Python の ``lstrip`` が
-Unicode 空白を落とす）を許容し、先頭に既知マーカーがある場合だけ
-仕分けとして扱う。中ほどにあるマーカーは無効とする。
+無関係な行は無視する（件数にも入れない）。仕分けは
+``decision_label`` の完全一致でのみ判定する（前後の空白も
+想定外として扱う）。空・欠落は「仕分けなし」、対応表にない値と
+文字列でない値は「想定外」として、いずれも実行段へ進ませない
+（fail-closed）。
 
-対応表は設定キー ``decision_markers`` で丸ごと差し替え可能で、
+対応表は設定キー ``decision_labels`` で丸ごと差し替え可能で、
 設定に無い場合はモジュール内の既定値を使う。既定値は合格ラインの
 ような判定値ではなく形式定義であるため、D6 のフォールバック禁止
 （しきい値・合格ラインの直書き禁止）には当たらない（SPEC 付記）。
 
-仕分けが取れなかった候補行は、理由コード（``no_marker``／
-``unknown_marker``／``missing_migration_target``）つきで出力の
+仕分けが取れなかった候補行は、理由コード（``no_decision``／
+``unknown_decision``／``missing_migration_target``）つきで出力の
 ``skipped`` に記録する。記録には ``candidate_id`` と理由コードのみを
-載せ、``reason`` の本文など実値は入れない（D4）。同一候補に
-マーカーつき行が複数ある場合は黙って間引かず両方を通し、重複の
-全体拒否は execute の D2 ガードに委ねる。仕分け済み0件でも正常
-出力とする（実行段が空で拒否するのが fail-closed として正しい）。
+載せ、行の本文など実値は入れない（D4）。同一候補に仕分け済み行が
+複数ある場合は黙って間引かず両方を通し、重複の全体拒否は
+execute の D2 ガードに委ねる。仕分け済み0件でも正常出力とする
+（実行段が空で拒否するのが fail-closed として正しい）。
+
+【仕様変更】2026-11-09 の本人の指示で、仕分け方式は理由列の先頭
+マーカー（``[削除]`` 等の手書き）からプルダウン選択へ変更された
+（2026-11-08 のマーカー決定時の留保「使いにくければあとでまた
+変えよ」に基づく）。理由列のマーカーはもう読まない。
 """
 
 from . import contracts
 from .cli import run_cli
 
-DEFAULT_DECISION_MARKERS = {
-    "[削除]": "delete",
-    "[統合]": "merge",
-    "[符号化]": "codify",
-    "[保持]": "keep",
+DEFAULT_DECISION_LABELS = {
+    "削除": "delete",
+    "統合": "merge",
+    "符号化": "codify",
+    "保持": "keep",
 }
 
-REASON_NO_MARKER = "no_marker"
-REASON_UNKNOWN_MARKER = "unknown_marker"
+REASON_NO_DECISION = "no_decision"
+REASON_UNKNOWN_DECISION = "unknown_decision"
 REASON_MISSING_MIGRATION_TARGET = "missing_migration_target"
 
 
@@ -57,35 +62,35 @@ def _config_get(config, key, default=None):
     return getattr(config, key, default)
 
 
-def validate_decision_markers(markers):
-    """``decision_markers`` の値を検証し、コピーを返す。
+def validate_decision_labels(labels):
+    """``decision_labels`` の値を検証し、コピーを返す。
 
     存在する場合は空でない dict で、キーは空でない文字列、値は
     ``contracts.JUDGED_VERDICTS`` のいずれかでなければならない。
     違反は ValueError とする。
     """
-    if not isinstance(markers, dict) or not markers:
+    if not isinstance(labels, dict) or not labels:
         raise ValueError(
-            f"decision_markers は空でない dict でなければなりません: {markers!r}"
+            f"decision_labels は空でない dict でなければなりません: {labels!r}"
         )
-    for marker, decision in markers.items():
-        if not isinstance(marker, str) or marker == "":
+    for label, decision in labels.items():
+        if not isinstance(label, str) or label == "":
             raise ValueError(
-                f"decision_markers のキーは空でない文字列でなければなりません: "
-                f"{marker!r}"
+                "decision_labels のキーは空でない文字列でなければなりません: "
+                f"{label!r}"
             )
         if not isinstance(decision, str) or decision not in contracts.JUDGED_VERDICTS:
             raise ValueError(
-                f"decision_markers の値が不正です: {marker!r} -> {decision!r}"
+                f"decision_labels の値が不正です: {label!r} -> {decision!r}"
             )
-    return dict(markers)
+    return dict(labels)
 
 
-def _resolve_markers(config):
-    markers = _config_get(config, "decision_markers")
-    if markers is None:
-        return dict(DEFAULT_DECISION_MARKERS)
-    return validate_decision_markers(markers)
+def _resolve_labels(config):
+    labels = _config_get(config, "decision_labels")
+    if labels is None:
+        return dict(DEFAULT_DECISION_LABELS)
+    return validate_decision_labels(labels)
 
 
 def _extract_rows(payload):
@@ -106,7 +111,7 @@ def _extract_rows(payload):
 
 
 def process(payload, config):
-    """台帳行の仕分けマーカーを読み、execute 用の ledger_rows を返す。"""
+    """台帳行の仕分け列を読み、execute 用の ledger_rows を返す。"""
     if not isinstance(payload, dict):
         raise ValueError("入力は dict でなければなりません")
     rows = _extract_rows(payload)
@@ -125,9 +130,7 @@ def process(payload, config):
     for item in judged["items"]:
         judged_by_id.setdefault(item["candidate_id"], item)
 
-    markers = _resolve_markers(config)
-    # 接頭辞が重なるカスタム対応表でも長いマーカーを優先する。
-    markers_by_length = sorted(markers, key=len, reverse=True)
+    labels = _resolve_labels(config)
 
     output_rows = []
     skipped = []
@@ -138,26 +141,21 @@ def process(payload, config):
         candidate_id = link
         candidate = candidates_by_id[link]
 
-        reason = row.get("reason")
-        if not isinstance(reason, str):
+        label = row.get("decision_label")
+        if label is None or (isinstance(label, str) and label == ""):
             skipped.append(
-                {"candidate_id": candidate_id, "reason_code": REASON_NO_MARKER}
+                {"candidate_id": candidate_id, "reason_code": REASON_NO_DECISION}
             )
             continue
-        stripped = reason.lstrip()
-
-        decision = None
-        for marker in markers_by_length:
-            if stripped.startswith(marker):
-                decision = markers[marker]
-                break
-        if decision is None:
-            if stripped.startswith("["):
-                code = REASON_UNKNOWN_MARKER
-            else:
-                code = REASON_NO_MARKER
-            skipped.append({"candidate_id": candidate_id, "reason_code": code})
+        if not isinstance(label, str) or label not in labels:
+            skipped.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason_code": REASON_UNKNOWN_DECISION,
+                }
+            )
             continue
+        decision = labels[label]
 
         migration_target = None
         if decision in contracts.VERDICTS_REQUIRING_MIGRATION_TARGET:

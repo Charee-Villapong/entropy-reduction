@@ -82,7 +82,7 @@ AI組織 Issue #19「エントロピー削減の仕組み」の正本仕様。P0
 - **D9 提示の一本化**：候補を台帳の行にするのは present だけ。needs_check の行には「要確認」を明記する。
 - **D10 再実行可能性**：同じ入力に対する各ユニットの出力は決定的（日付フィールドを除く）。
 
-フェーズ対応：P0＝本書の固定＋テスト先行。P1＝measure／linecount／detect。P2＝judge。P3＝present／execute（台帳連携は sheet-writer 経由）。P4＝定期タスク化。P5＝初回の一巡と QA。V-EMB（埋め込みモデル選定）は独立フェーズで、detect の重複抽出拡張の前提になる。
+フェーズ対応：P0＝本書の固定＋テスト先行。P1＝config／contracts／linecount／measure（detect はスタブまで）。P2＝judge／detect。P3＝present／execute（台帳連携は sheet-writer 経由）。P4＝定期タスク化。P5＝初回の一巡と QA。V-EMB（埋め込みモデル選定）は独立フェーズで、detect の重複抽出拡張の前提になる。
 
 ## 6. テストについて
 

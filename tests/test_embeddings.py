@@ -10,7 +10,7 @@ import math
 
 import pytest
 
-from entropy_reduction import embeddings
+from entropy_reduction import detect, embeddings
 
 
 def _unit_vector(degrees):
@@ -199,3 +199,33 @@ def test_pca_reduce_preserves_cosine_similarity_order():
     assert order_after == order_before
     for i, j in pairs:
         assert after[i][j] == pytest.approx(before[i][j])
+
+
+# --- detect: embedding config requirement -----------------------------------
+
+
+def test_detect_embedding_path_requires_embedding_config_keys(snapshot):
+    # 埋め込み経路の設定キーが欠けていれば、モデル読み込みに入る前に
+    # ValueError になること（フォールバック直書き廃止の回帰防止）。
+    # sentence-transformers は不要：必須チェックは埋め込み実行より前に走る。
+    payload = {
+        "kind": "detect_input",
+        "version": 1,
+        "snapshot": snapshot,
+        "inventory_candidates": [],
+        "items": [],
+        "documents": [
+            {"target": "docs/a.md", "text": "重複している文書その一。"},
+            {"target": "docs/b.md", "text": "重複している文書その二。"},
+        ],
+    }
+    config = {
+        "bloat_md_lines": 300,
+        "unused_days": 90,
+        "embedding_model": "cl-nagoya/ruri-v3-310m",
+        # embedding_chunk_chars / embedding_pca_components /
+        # embedding_top_k / embedding_relative_margin /
+        # embedding_min_similarity を欠く。
+    }
+    with pytest.raises(ValueError):
+        detect.process(payload, config)

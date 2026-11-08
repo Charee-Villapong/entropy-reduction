@@ -40,6 +40,13 @@ def _required_threshold(config, key):
     return value
 
 
+def _required_embedding_value(config, key):
+    value = _config_get(config, key)
+    if value is None:
+        raise ValueError(f"埋め込み経路には設定 {key} が必要です")
+    return value
+
+
 def _is_md_item(item, target):
     file_type = item.get("file_type")
     if file_type is None:
@@ -60,21 +67,11 @@ def _embedding_candidates(payload, config, append_candidate):
     model = _config_get(config, "embedding_model")
     if not model:
         raise ValueError("埋め込み経路には設定 embedding_model が必要です")
-    chunk_chars = _config_get(config, "embedding_chunk_chars", 800)
-    if chunk_chars is None:
-        chunk_chars = 800
-    pca_components = _config_get(config, "embedding_pca_components", 64)
-    if pca_components is None:
-        pca_components = 64
-    top_k = _config_get(config, "embedding_top_k", 3)
-    if top_k is None:
-        top_k = 3
-    relative_margin = _config_get(config, "embedding_relative_margin", 0.03)
-    if relative_margin is None:
-        relative_margin = 0.03
-    min_similarity = _config_get(config, "embedding_min_similarity", 0.5)
-    if min_similarity is None:
-        min_similarity = 0.5
+    chunk_chars = _required_embedding_value(config, "embedding_chunk_chars")
+    pca_components = _required_embedding_value(config, "embedding_pca_components")
+    top_k = _required_embedding_value(config, "embedding_top_k")
+    relative_margin = _required_embedding_value(config, "embedding_relative_margin")
+    min_similarity = _required_embedding_value(config, "embedding_min_similarity")
 
     target_first_index = {}
     chunk_texts = []

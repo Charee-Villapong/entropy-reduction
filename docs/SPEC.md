@@ -48,11 +48,11 @@ AI組織 Issue #19「エントロピー削減の仕組み」の正本仕様。P0
 
 ### ledger_rows（present の出力）
 - `rows[]`：台帳の1行分（タスク／状態／止まってる理由・前提条件／前提の確認方法／期日・次回確認日／関連リンク／最終更新の7要素）
-- `judged` と `needs_check` の全候補を行にする。`needs_check` の行は前提条件の欄に「要確認（証拠不足）」と明記する。
+- 行にするのは、`judged`（verdict が delete／merge／codify）と `needs_check` の候補。verdict が `keep` の候補は「対象外」として行にせず、件数だけを出力の `excluded_count` に報告する（2026-11-08 本人決定。P0 先行テストの「全候補が行になる」前提は本決定で変更された）。`needs_check` の行は前提条件の欄に「要確認（証拠不足）」と明記する。
 - **提示の形（2026-11-08 本人決定）**：present は候補を確度で3段に分けて提示する。本人が精査するのは主に「要確認」の段とする。
   - 「ほぼ確実」：証拠3点が揃った `judged` の候補。証拠を併記して提示する。
   - 「要確認」：`needs_check` の候補。上記の「要確認（証拠不足）」の明記がこれに当たる。
-  - 「対象外」：判定の結果、削減の対象にならない候補。
+  - 「対象外」：判定の結果、削減の対象にならない候補（verdict が `keep`）。行にはせず、件数のみを報告する（2026-11-08 本人決定）。
   - 「ほぼ確実」の段は種類（`category`）ごとに束ねて提示し、グループ単位でまとめて仕分けできる形にする（1件ずつの確認を強いない）。
   - 週次の提示は増分のみとし、提示済みの候補を繰り返し提示しない（初回の棚卸し分が最大で、以後は増分のみ）。
 
@@ -115,3 +115,17 @@ P2（detect／judge の実装）で適用した前提をここに記録する。
 - **detect**：入力は detect_input（`snapshot`／`inventory_candidates`／`items`）。しきい値の境界は Q8 の設計判断どおり「以上（>=）」で適用する（肥大＝ md の `md_lines` が `bloat_md_lines` 以上、死蔵＝ `last_used_days_ago` が `unused_days` 以上）。`items` の同一 `signature` は重複候補を1件だけ出す。`inventory_candidates` は `source: inventory` でそのまま候補に載せ、category の不正は ValueError とする。候補 ID は入力順に決定的に振る（D10）。
 - **detect の埋め込み経路**：入力に `documents`（`target`／`text` の列）があれば、チャンク化 → 採用モデルでベクトル化 → PCA 圧縮 → 類似ペア検出を行い、`source: embedding` の重複候補を出す。ここでいう PCA は、コサイン類似度を保存するため**中心化しない truncated SVD**（データ行列の上位特異方向への射影）とする。中心化する通常の PCA は原点の移動でベクトル間の角度を変えてしまい、実測でも言い換えペアの類似度が 0.943 から 0.253 に崩れて候補を検出できなかった（P2 実働確認で判明）。中心化しない SVD では類似度の順序・値が保たれることを、ベンチ60文の順位精度（生 0.972 に対し k=64 で 0.972、k=32 で 1.0）でも確認済み。候補の選択は順位・相対評価を軸とする：ペアが互いの近傍順位（設定 `embedding_top_k`）に入り、かつ類似度が双方の平均類似度＋相対マージン（設定 `embedding_relative_margin`）を超え、かつ絶対値の足切り（設定 `embedding_min_similarity`）以上であること。出力には本文の実値を含めず、類似度・順位などのメタ情報だけを載せる（D4）。`documents` が無い入力では埋め込み経路は動かない。
 - **judge**：入力は judge_input（`candidates`／`evidence`）。証拠エントリは証拠3点に加えて判定案（`proposed_verdict`／`migration_target`／`reason`）を含む（Q9）。証拠3点が1つでも欠ける、または判定案が欠ける候補は `needs_check` に分離する（verdict は null、不足点は reason に明記）。`proposed_verdict` が値域外なら ValueError。統合・符号化（merge／codify）で移行先が無い場合も ValueError。候補に無い ID への証拠は ValueError。入力の candidates が判定欄（verdict）を持てば contracts が ValueError とする（層の分離）。
+
+## 付記：入力前提と設計判断（P3 で確定）
+
+P3（present／execute の実装）で適用した前提をここに記録する。§3 の ledger_rows の記述は、2026-11-08 の本人決定（「対象外」は行にせず件数のみ報告する）を反映して改めた。それ以外の本文（§1〜§6）の変更はない。
+
+- **present の入力**：judged 形式そのもの。任意で次の補助フィールドを同梱できる（いずれも非実値の識別子・メタ情報のみ）。
+- `candidates`（candidates 形式）：候補の `target`／`category`／`title` を candidate_id で引くために使う。無くても行は作れる（その場合の行は candidate_id で識別し、束ねのグループ識別は付けない）。
+- `presented_candidate_ids`：過去の提示で既に行にした候補 ID の列。週次提示の増分管理に使い、該当候補は行にせず、出力の `already_presented_count` に件数だけを報告する。
+- `presented_on`（YYYY-MM-DD）：提示日。省略時は実行日。行の `updated_at` は提示日、`due_date`（次回確認日）は提示日の7日後とする。
+- **present の段分けと行の組み立て**：`judged` かつ verdict が delete／merge／codify → 「ほぼ確実」。`needs_check` → 「要確認」。`judged` かつ verdict が `keep` → 「対象外」（行にせず `excluded_count` に数える）。行は7要素ちょうどで、`link` は candidate_id、`status` は「未着手」とする。「ほぼ確実」の行は証拠3点の要約（最終使用・参照・影響）と判定・移行先・理由を `reason` に併記し、種類（category）ごとの束ねとして `task` の先頭に「」のグループ識別を付け、同種の行が隣り合うよう並べる。「要確認」の行は `reason` の先頭に「要確認（証拠不足）」を明記する。出力は ledger_rows 形式に `excluded_count`／`already_presented_count` を加えたものとする（contracts の検証は行の7要素と kind／version を見るため、これらの件数フィールドは検証と矛盾しない）。
+- **台帳への実書き込み**：行の実シートへの追加は、実行時（P4 の定期タスク／P5 の初回一巡）に sheet-writer 経由で行う（対象シートのローカル設定に従い、触る前に行配置を読み直す）。present ユニット自体は交換形式の生成までを担い、シートには触らない。P3 の時点では実データの提示・実行は行わない。
+- **execute の入力とガード（D2 の具体化）**：入力は ledger_rows 形式で、各行は7要素に加えて `candidate_id`／`target`／`action`／`user_decision` を持つ（台帳からの読み戻し時に付く）。ガードは fail-closed とする：行が0件、candidate_id の重複、`user_decision` の欠落・空白・値域外（delete／merge／codify／keep 以外）、`action` と `user_decision` の不一致、のいずれかがあれば、1件も実行せず全体を ValueError で拒否する。present が出した直後の行（user_decision を持たない）はそのままでは実行できない。
+- **execute の実行実体**：削減操作は executor（行を受け取り結果文字列を返す呼び出し可能オブジェクト）へ委譲し、`process(payload, config, executor=None)` で差し替え可能とする。executor が無い場合は、設定に `execute_root`（操作対象の基点ディレクトリ）があればファイル実体に対する executor を、無ければ記録のみの executor（実データに触らず `done` を返す）を使う。ファイル実体の executor の意味論：delete＝対象を削除、merge＝対象の内容を `migration_target` の末尾へ寄せてから対象を削除、codify＝移行（符号化）は組織側の開発で済んでいる前提で対象を削除。対象パスは `execute_root` 配下に解決し、配下から外れるパス（絶対パス・`..` による脱出）は実行前に全体を拒否する。個別の操作失敗（対象不在など）はその行の `result` を `failed` として記録し、他行の実行は続ける。
+- **execution_record の counts**：`total` は入力行数、`executed` は result が `done` の件数。verdict が `keep` の行は操作を行わず `result` を `kept` とし、`executed` には数えない。

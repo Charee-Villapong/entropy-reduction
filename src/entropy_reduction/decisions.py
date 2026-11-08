@@ -74,7 +74,7 @@ def validate_decision_markers(markers):
                 f"decision_markers のキーは空でない文字列でなければなりません: "
                 f"{marker!r}"
             )
-        if decision not in contracts.JUDGED_VERDICTS:
+        if not isinstance(decision, str) or decision not in contracts.JUDGED_VERDICTS:
             raise ValueError(
                 f"decision_markers の値が不正です: {marker!r} -> {decision!r}"
             )

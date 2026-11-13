@@ -185,6 +185,14 @@ def test_execute_executor_failure_is_recorded_not_raised(unit, load_config):
     assert result["counts"]["executed"] == 0
 
 
+def _git_add_all(root):
+    """Make every file under *root* git-tracked (init + add)."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+
+
 def test_execute_filesystem_delete_and_merge(unit, load_config, tmp_path):
     execute = unit("execute")
     root = tmp_path / "root"
@@ -192,6 +200,8 @@ def test_execute_filesystem_delete_and_merge(unit, load_config, tmp_path):
     (root / "docs" / "gone.md").write_text("old\n", encoding="utf-8")
     (root / "docs" / "src.md").write_text("src\n", encoding="utf-8")
     (root / "docs" / "dst.md").write_text("dst\n", encoding="utf-8")
+    # 実書き換えの対象は git 管理下のファイルに限るため、追跡対象にする。
+    _git_add_all(root)
     config = load_config(overrides={"execute_root": str(root)})
     payload = _exec_payload(
         _exec_row("cand-1", "delete", target="docs/gone.md"),

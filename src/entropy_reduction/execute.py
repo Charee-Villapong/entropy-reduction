@@ -14,14 +14,26 @@ codify／keep）が記録されていない行が1件でも混ざれば、全体
 executor=None)`` で差し替え可能）。executor が無い場合、設定に
 ``execute_root`` があればその配下のファイル実体を操作する executor
 を、無ければ実データに触らない記録のみの executor を使う。ファイル
-実体の executor は、対象パスが ``execute_root`` 配下に解決しない場合
+実体の executor は、対象パスが基点の配下に解決しない場合
 （絶対パス・``..`` による脱出）は実行前に全体を拒否する。個別の操作
 失敗はその行の result を ``failed`` として記録する。keep の行は操作
 を行わず result を ``kept`` とする。
+
+対象パスの基点は2段で決める：対象の先頭セグメント（計測対象名）が
+設定 ``execute_target_bases`` に対応付けられていればその基点配下の
+残りパスとして、無ければ ``execute_root`` 配下として解決する。
+
+実書き換えの対象は git 管理下（追跡対象）のファイルに限る（復元
+可能性の担保）。実在する対象が git の追跡対象でなければ、その行は
+書き換えず result を ``skipped_not_in_git`` として記録する（他行の
+実行は続ける）。統合先が実在する場合は統合先も追跡対象であること
+を同じく条件とする。対象が実在しない場合は従来どおり操作を試み、
+失敗を ``failed`` として記録する。
 """
 
 import datetime
 import shutil
+import subprocess
 from pathlib import Path
 
 from . import contracts
@@ -29,6 +41,7 @@ from .cli import run_cli
 
 _VALID_DECISIONS = contracts.JUDGED_VERDICTS
 _ACTIONABLE_DECISIONS = frozenset({"delete", "merge", "codify"})
+_SKIPPED_NOT_IN_GIT = "skipped_not_in_git"
 
 
 def _config_get(config, key, default=None):
@@ -87,6 +100,8 @@ def _resolve_under_root(root, target, context):
     """target を root 配下のパスに解決する。配下から外れれば ValueError。"""
     if not isinstance(target, str) or not target:
         raise ValueError(f"{context} に対象パスがありません")
+    if root is None:
+        raise ValueError(f"{context} の基点が設定されていません: {target!r}")
     base = Path(root).expanduser().resolve()
     resolved = (base / target).resolve()
     if base not in resolved.parents:
@@ -96,25 +111,105 @@ def _resolve_under_root(root, target, context):
     return resolved
 
 
-def _make_filesystem_executor(root, rows):
+def _target_bases(config):
+    """設定 ``execute_target_bases``（対象名→基点の対応表）を返す。"""
+    bases = _config_get(config, "execute_target_bases") or {}
+    if not isinstance(bases, dict):
+        raise ValueError(
+            f"execute_target_bases は dict でなければなりません: {bases!r}"
+        )
+    return bases
+
+
+def _resolve_target(root, bases, target, context):
+    """対象パスを解決する。
+
+    先頭セグメントが ``bases`` に対応付けられていれば、その基点配下
+    の残りパスとして解決する。無ければ ``root`` 配下として解決する。
+    """
+    if isinstance(target, str) and target:
+        first, separator, rest = target.partition("/")
+        if separator and first in bases:
+            return _resolve_under_root(bases[first], rest, context)
+    return _resolve_under_root(root, target, context)
+
+
+def _git_toplevel(path):
+    """path を含む git 作業ツリーの基点を返す。無ければ None。"""
+    probe = path if path.is_dir() else path.parent
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(probe), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return Path(result.stdout.strip()).resolve()
+
+
+def _git_ls_files(toplevel, relative):
+    """作業ツリー基点から見た relative 配下の追跡ファイル一覧を返す。"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(toplevel), "ls-files", "-z", "--", relative],
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    names = result.stdout.decode("utf-8", errors="surrogateescape").split("\0")
+    return [name for name in names if name]
+
+
+def _is_git_tracked(path):
+    """実在する path が git の追跡対象かどうかを返す。
+
+    ファイルは索引に載っていること、ディレクトリは配下の全ファイル
+    が追跡対象であることを条件とする。
+    """
+    toplevel = _git_toplevel(path)
+    if toplevel is None:
+        return False
+    relative = path.relative_to(toplevel).as_posix()
+    tracked = _git_ls_files(toplevel, relative)
+    if tracked is None:
+        return False
+    if path.is_dir():
+        tracked_paths = {toplevel / name for name in tracked}
+        actual_paths = {entry for entry in path.rglob("*") if entry.is_file()}
+        return actual_paths <= tracked_paths
+    return relative in tracked
+
+
+def _make_filesystem_executor(root, bases, rows):
     """ファイル実体を操作する executor を作る（実行前に全行を事前検証）。"""
     for row in rows:
         if row["user_decision"] not in _ACTIONABLE_DECISIONS:
             continue
         candidate_id = row["candidate_id"]
-        _resolve_under_root(root, row.get("target"), candidate_id)
+        _resolve_target(root, bases, row.get("target"), candidate_id)
         if row["user_decision"] == "merge":
-            _resolve_under_root(
-                root, row.get("migration_target"), f"{candidate_id} の移行先"
+            _resolve_target(
+                root, bases, row.get("migration_target"), f"{candidate_id} の移行先"
             )
 
     def _execute(row):
         decision = row["user_decision"]
-        target = _resolve_under_root(root, row.get("target"), row["candidate_id"])
+        target = _resolve_target(root, bases, row.get("target"), row["candidate_id"])
+        if target.exists() and not _is_git_tracked(target):
+            return _SKIPPED_NOT_IN_GIT
         if decision == "merge":
-            destination = _resolve_under_root(
-                root, row.get("migration_target"), "移行先"
+            destination = _resolve_target(
+                root, bases, row.get("migration_target"), "移行先"
             )
+            if destination.exists() and not _is_git_tracked(destination):
+                return _SKIPPED_NOT_IN_GIT
             data = target.read_bytes()
             with destination.open("ab") as handle:
                 handle.write(data)
@@ -130,8 +225,9 @@ def _make_filesystem_executor(root, rows):
 
 def _default_executor(config, rows):
     root = _config_get(config, "execute_root")
-    if root:
-        return _make_filesystem_executor(root, rows)
+    bases = _target_bases(config)
+    if root or bases:
+        return _make_filesystem_executor(root, bases, rows)
     return _record_executor
 
 

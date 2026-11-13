@@ -102,6 +102,31 @@ def load_config(path):
         if not 0 <= value <= 1:
             raise ValueError(f"{key} は 0〜1 の範囲でなければなりません: {value!r}")
 
+    if "execute_root" in data:
+        value = data["execute_root"]
+        if not isinstance(value, str) or value == "":
+            raise ValueError(
+                f"execute_root は空でない文字列でなければなりません: {value!r}"
+            )
+
+    if "execute_target_bases" in data:
+        bases = data["execute_target_bases"]
+        if not isinstance(bases, dict):
+            raise ValueError(
+                f"execute_target_bases は dict でなければなりません: {bases!r}"
+            )
+        for name, base in bases.items():
+            if not isinstance(name, str) or name == "" or "/" in name:
+                raise ValueError(
+                    "execute_target_bases のキーは対象名（/ を含まない文字列）"
+                    f"でなければなりません: {name!r}"
+                )
+            if not isinstance(base, str) or base == "":
+                raise ValueError(
+                    "execute_target_bases の値は空でない文字列でなければ"
+                    f"なりません: {name!r} -> {base!r}"
+                )
+
     if "decision_labels" in data:
         labels = data["decision_labels"]
         if not isinstance(labels, dict) or not labels:

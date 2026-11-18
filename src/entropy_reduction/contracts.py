@@ -92,10 +92,14 @@ def _fail(message):
 
 
 def _check_no_forbidden_fields(value, path="$"):
-    """D4: dict のキーを再帰的に走査し、禁止キーがあれば ValueError。"""
+    """D4: dict のキーを再帰的に走査し、禁止キーがあれば ValueError。
+
+    キーの照合は大文字小文字を無視する（``Password`` や ``API_KEY``
+    のような表記ゆれも禁止キーとして検出する）。
+    """
     if isinstance(value, dict):
         for key, sub in value.items():
-            if key in FORBIDDEN_VALUE_FIELDS:
+            if isinstance(key, str) and key.lower() in FORBIDDEN_VALUE_FIELDS:
                 _fail(f"D4 違反: 実値フィールド {key!r} が {path} に含まれています")
             _check_no_forbidden_fields(sub, f"{path}.{key}")
     elif isinstance(value, list):

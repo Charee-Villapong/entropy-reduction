@@ -341,3 +341,14 @@ def test_d4_nested_real_value_field_rejected(unit, kind, list_key, field):
     payload[list_key][0][field] = "SENTINEL-REAL-VALUE"
     with pytest.raises(ValueError):
         contracts.validate(payload)
+
+
+@pytest.mark.parametrize("field", ["Password", "PASSWORD", "API_KEY",
+                                   "Content", "Secret"])
+def test_d4_case_variant_real_value_field_rejected(unit, field):
+    """D4: 禁止キーの照合は大文字小文字を無視する。"""
+    contracts = unit("contracts")
+    payload = copy.deepcopy(VALID_BY_KIND["candidates"])
+    payload["items"][0][field] = "SENTINEL-REAL-VALUE"
+    with pytest.raises(ValueError):
+        contracts.validate(payload)

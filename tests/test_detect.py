@@ -219,3 +219,40 @@ def test_item_missing_target_raises(unit, load_config,
     )
     with pytest.raises(ValueError):
         detect.process(payload, load_config())
+
+
+def test_item_with_non_numeric_md_lines_raises(unit, load_config,
+                                               make_detect_payload):
+    """md_lines が文字列だと TypeError でなく ValueError（交換形式の契約）。"""
+    detect = unit("detect")
+    payload = make_detect_payload(
+        items=[
+            {
+                "target": "docs/big.md",
+                "file_type": "md",
+                "md_lines": "999",
+                "last_used_days_ago": 1,
+            }
+        ]
+    )
+    with pytest.raises(ValueError):
+        detect.process(payload, load_config())
+
+
+def test_item_with_non_numeric_last_used_days_ago_raises(
+    unit, load_config, make_detect_payload
+):
+    """last_used_days_ago が文字列だと TypeError でなく ValueError。"""
+    detect = unit("detect")
+    payload = make_detect_payload(
+        items=[
+            {
+                "target": "docs/old.md",
+                "file_type": "md",
+                "md_lines": 10,
+                "last_used_days_ago": "90",
+            }
+        ]
+    )
+    with pytest.raises(ValueError):
+        detect.process(payload, load_config())

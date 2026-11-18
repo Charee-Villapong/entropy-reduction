@@ -47,6 +47,10 @@ def _required_embedding_value(config, key):
     return value
 
 
+def _is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _is_md_item(item, target):
     file_type = item.get("file_type")
     if file_type is None:
@@ -197,6 +201,8 @@ def process(payload, config):
             raise ValueError(f"item に target がありません: {item!r}")
 
         md_lines = item.get("md_lines")
+        if md_lines is not None and not _is_number(md_lines):
+            raise ValueError(f"item の md_lines は数値でなければなりません: {item!r}")
         if _is_md_item(item, target) and md_lines is not None:
             if md_lines >= bloat_md_lines:
                 append_candidate(
@@ -207,6 +213,10 @@ def process(payload, config):
                     detail=(f"md {md_lines}行（入口の目安 {bloat_md_lines}行以上）"),
                 )
         last_used_days_ago = item.get("last_used_days_ago")
+        if last_used_days_ago is not None and not _is_number(last_used_days_ago):
+            raise ValueError(
+                f"item の last_used_days_ago は数値でなければなりません: {item!r}"
+            )
         if last_used_days_ago is not None and last_used_days_ago >= unused_days:
             append_candidate(
                 source="weekly",

@@ -225,3 +225,81 @@ def test_execute_target_bases_values_must_be_non_empty_strings(load_config):
 def test_execute_root_must_be_a_non_empty_string(load_config):
     with pytest.raises(ValueError):
         load_config(overrides={"execute_root": ""})
+
+
+def test_codify_keeps_tracked_file(unit, load_config, make_execute_payload, tmp_path):
+    """codify は実体を書き換えない（記録のみ）。ファイルが残ること。"""
+    execute = unit("execute")
+    root = tmp_path / "root"
+    (root / "docs").mkdir(parents=True)
+    target = root / "docs" / "rule.md"
+    target.write_text("rule\n", encoding="utf-8")
+    _init_repo(root, ["docs/rule.md"])
+    config = load_config(overrides={"execute_root": str(root)})
+    payload = make_execute_payload(rows=[_row("cand-1", "codify", "docs/rule.md")])
+    assert _results(execute, payload, config) == {"cand-1": "done"}
+    assert target.read_text(encoding="utf-8") == "rule\n"
+
+
+def test_codify_keeps_tracked_directory(
+    unit, load_config, make_execute_payload, tmp_path
+):
+    """codify はディレクトリも削除しない。"""
+    execute = unit("execute")
+    root = tmp_path / "root"
+    tree = root / "tree"
+    tree.mkdir(parents=True)
+    (tree / "rule.md").write_text("rule\n", encoding="utf-8")
+    _init_repo(root, ["tree/rule.md"])
+    config = load_config(overrides={"execute_root": str(root)})
+    payload = make_execute_payload(rows=[_row("cand-1", "codify", "tree")])
+    assert _results(execute, payload, config) == {"cand-1": "done"}
+    assert (tree / "rule.md").exists()
+
+
+def test_merge_into_missing_destination_is_skipped_and_creates_nothing(
+    unit, load_config, make_execute_payload, tmp_path
+):
+    """実在しない統合先は新規作成せず skipped_not_in_git とする。"""
+    execute = unit("execute")
+    root = tmp_path / "root"
+    (root / "docs").mkdir(parents=True)
+    source = root / "docs" / "src.md"
+    source.write_text("src\n", encoding="utf-8")
+    destination = root / "docs" / "new.md"
+    _init_repo(root, ["docs/src.md"])
+    config = load_config(overrides={"execute_root": str(root)})
+    payload = make_execute_payload(
+        rows=[
+            _row(
+                "cand-1",
+                "merge",
+                "docs/src.md",
+                migration_target="docs/new.md",
+            )
+        ]
+    )
+    assert _results(execute, payload, config) == {"cand-1": "skipped_not_in_git"}
+    assert source.exists()
+    assert not destination.exists()
+
+
+def test_merge_with_directory_target_is_failed(
+    unit, load_config, make_execute_payload, tmp_path
+):
+    """merge の対象がディレクトリなら failed として記録し、何も変えない。"""
+    execute = unit("execute")
+    root = tmp_path / "root"
+    tree = root / "tree"
+    tree.mkdir(parents=True)
+    (tree / "inner.md").write_text("inner\n", encoding="utf-8")
+    destination = root / "dst.md"
+    destination.write_text("dst\n", encoding="utf-8")
+    _init_repo(root, ["tree/inner.md", "dst.md"])
+    config = load_config(overrides={"execute_root": str(root)})
+    payload = make_execute_payload(
+        rows=[_row("cand-1", "merge", "tree", migration_target="dst.md")]
+    )
+    assert _results(execute, payload, config) == {"cand-1": "failed"}
+    assert (tree / "inner.md").exists()
+    assert destination.read_text(encoding="utf-8") == "dst\n"

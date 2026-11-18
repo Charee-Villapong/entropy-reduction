@@ -26,9 +26,11 @@ executor=None)`` で差し替え可能）。executor が無い場合、設定に
 実書き換えの対象は git 管理下（追跡対象）のファイルに限る（復元
 可能性の担保）。実在する対象が git の追跡対象でなければ、その行は
 書き換えず result を ``skipped_not_in_git`` として記録する（他行の
-実行は続ける）。統合先が実在する場合は統合先も追跡対象であること
-を同じく条件とする。対象が実在しない場合は従来どおり操作を試み、
-失敗を ``failed`` として記録する。
+実行は続ける）。統合先も実在し追跡対象であることを条件とし、実在
+しない統合先は新規作成せず同じく ``skipped_not_in_git`` とする。
+ツール化（codify）は対象の実体を書き換えず、記録のみとする。対象
+が実在しない場合は従来どおり操作を試み、失敗を ``failed`` として
+記録する。
 """
 
 import datetime
@@ -202,14 +204,19 @@ def _make_filesystem_executor(root, bases, rows):
     def _execute(row):
         decision = row["user_decision"]
         target = _resolve_target(root, bases, row.get("target"), row["candidate_id"])
+        if decision == "codify":
+            # ツール化（codify）は対象の実体を書き換えない。記録のみ。
+            return "done"
         if target.exists() and not _is_git_tracked(target):
             return _SKIPPED_NOT_IN_GIT
         if decision == "merge":
             destination = _resolve_target(
                 root, bases, row.get("migration_target"), "移行先"
             )
-            if destination.exists() and not _is_git_tracked(destination):
+            if not destination.exists() or not _is_git_tracked(destination):
                 return _SKIPPED_NOT_IN_GIT
+            if not target.is_file():
+                return "failed"
             data = target.read_bytes()
             with destination.open("ab") as handle:
                 handle.write(data)
